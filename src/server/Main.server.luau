@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Fish = require(script.Parent:WaitForChild("Fish"))
+local Boost = require(script.Parent:WaitForChild("Boost"))
 
 local SIZE_ATTRIBUTE = Fish.SIZE_ATTRIBUTE
 
@@ -40,6 +41,8 @@ local function onPlayerAdded(player: Player)
 		onCharacterAdded(player, player.Character)
 	end
 end
+
+Boost.start()
 
 for _, player in Players:GetPlayers() do
 	onPlayerAdded(player)

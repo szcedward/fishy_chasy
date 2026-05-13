@@ -6,6 +6,61 @@ Format: a dated section per session with `Goal`, `Done`, `State at end`, `Pendin
 
 ---
 
+## 2026-05-12 (later 5) — Slice C: Boost sprint
+
+**Goal**: per `docs/ARCHITECTURE.md` §6 Slice C + PRD §10.2 — server-authoritative 5s ×2 speed Boost with 10s cooldown starting from effect end, plus client input (PC/mobile/gamepad) and a simple HUD readout. AI Boost remains deferred to Slice G.
+
+**Done**:
+
+- `src/shared/Config.luau`: extended `Config.Boost` with `ActiveUntilAttr = "BoostActiveUntil"` and `ReadyAtAttr = "BoostReadyAt"` so server and client share attribute names.
+- `src/shared/Remotes.luau` (new): centralized remote folder + lazy creation. `Remotes.RequestBoost` is a `RemoteEvent` under `ReplicatedStorage.Remotes`. Handles both server-create and client-WaitForChild flows.
+- `src/server/Boost.luau` (new): `Boost.start()` connects the `RequestBoost` server event and runs a `Heartbeat` that walks all players and writes `Humanoid.WalkSpeed` to `BaseWalkSpeed` or `BaseWalkSpeed × Multiplier` based on the `BoostActiveUntil` attribute. `tryStartBoost(player)` rejects requests while `BoostReadyAt > now`; on accept it sets `BoostActiveUntil = now + 5` and `BoostReadyAt = now + 15` (so cooldown is effectively `Duration + Cooldown` from press, == 10s after effect ends).
+- `src/server/Main.server.luau`: requires `Boost` and calls `Boost.start()` before the player-handler loop so `OnServerEvent` is connected before any player can fire it.
+- `src/client/Main.client.luau` (new, LocalScript): tiny entry — requires `Boost` and `Hud` and starts them.
+- `src/client/Boost.luau` (new): binds a `ContextActionService` action `FishBoost` to `KeyCode.F`, `KeyCode.ButtonR2`, and an auto-created mobile touch button (titled `"BOOST"`). Fires `RequestBoost` on `UserInputState.Begin`.
+- `src/client/Hud.luau` (new): mounts a `ScreenGui` (`ResetOnSpawn = false`) with a single status frame at bottom-right reading from the two Boost attributes via `workspace:GetServerTimeNow()` on every Heartbeat: shows `BOOST READY (F)` / `BOOST 4.2s` (green) / `CD 7.1s` (gray).
+
+**Design fidelity notes**:
+
+- PRD §10.2 cooldown semantics — “从效果结束开始算” → `ReadyAt = pressTime + Duration + Cooldown`. Server is sole truth.
+- PRD §10.2 “no stacking”: while `ReadyAt > now`, repeat requests are silently rejected.
+- PRD §P7 (speed not tied to size): respected; multiplier applies to `BaseWalkSpeed` only, no interaction with `Size`/Tier.
+- Roblox `workspace:GetServerTimeNow()` is the shared clock — synchronized between client and server, eliminates time-base drift for the HUD countdown.
+- Boost survives respawn: because the per-frame `applyWalkSpeedTo` reads attributes (lifecycle-independent) and writes to whichever Humanoid is currently in `player.Character`, a respawn mid-boost auto-reapplies the multiplier on the new character. Cooldown continues regardless.
+
+**Keybind choice**:
+
+- PC: `F` (PRD §10.2 suggested `LeftShift / Q` but `LeftShift` collides with Roblox default ShiftLock toggle; `F` is unbound by default and matches common action-key conventions). Easy to flip in `src/client/Boost.luau` if user prefers another key.
+- Mobile: auto touch button via `ContextActionService` (label `"BOOST"`).
+- Gamepad: `ButtonR2` (right trigger).
+
+**State at end**:
+
+- Files: added `Remotes.luau` (shared), `Boost.luau` (server), `Main.client.luau`/`Boost.luau`/`Hud.luau` (client). `src/client/` is no longer empty.
+- Runtime instances: `ReplicatedStorage.Remotes.RequestBoost` (RemoteEvent), `Players.LocalPlayer.PlayerGui.FishHud.BoostStatus` (ScreenGui frame).
+- No structural changes to `Fish`/predation.
+
+**Testing checklist (user)**:
+
+1. `rojo serve` running; reconnect from Studio.
+2. Press Play.
+3. Bottom-right of screen should show `BOOST READY (F)` (white).
+4. Press **F** (or click the on-screen `BOOST` button if you’re testing mobile mode).
+   - HUD changes to `BOOST 5.0s` (counting down, green).
+   - Character speed visibly doubles for 5 seconds.
+   - When 5s expires, HUD switches to `CD 10.0s` (gray) and counts down.
+   - During cooldown, pressing F has no effect (silently rejected).
+   - At `CD 0.0s`, HUD returns to `BOOST READY (F)`.
+5. Press F again at the moment of contact with a small AI — you should see size go up *and* still travel at boosted speed.
+6. Trigger Boost, then run into the 50 AI: die mid-boost. After respawning, if any seconds remain on `BoostActiveUntil` you should still be moving fast for the leftover time. Cooldown continues independently.
+
+**Pending / next session**:
+
+- Slice D: predation cooldown debuff (PRD §5.5) — 10s no-reward window for the eater after a player respawns; AI fish exempt.
+- Then Slice E: server-wide level system (level number, `LevelParticipants` snapshot, `target`, `time_limit`, `frozen` + `bonus`, `CatchUp` lane, fail → reset to Level 1).
+
+---
+
 ## 2026-05-12 (later 4) — Slice B: eat-the-AI prototype
 
 **Goal**: per `docs/ARCHITECTURE.md` §6 Slice B — server spawns static AI fish; heartbeat overlap check between players and AI; strict-greater-eats-smaller (ties favor player per PRD §4.4); eaten AI relocates 1:1 to a new random spot; player gains `Size`; head labels show numbers. No level system, no PvP, no Boost, no debuff.

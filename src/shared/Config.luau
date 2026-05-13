@@ -8,6 +8,8 @@ Config.Boost = {
 	Duration = 5,
 	Cooldown = 10,
 	Multiplier = 2,
+	ActiveUntilAttr = "BoostActiveUntil",
+	ReadyAtAttr = "BoostReadyAt",
 }
 
 Config.PredationDebuffSeconds = 10
