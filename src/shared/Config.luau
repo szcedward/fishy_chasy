@@ -29,6 +29,7 @@ Config.AI = {
 Config.Predation = {
 	TickHz = 60,
 	ContactRadius = 4,
+	NoPredationRewardUntilAttr = "NoPredationRewardUntil",
 }
 
 Config.Tiers = {
