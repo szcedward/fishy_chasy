@@ -32,6 +32,36 @@ Config.Predation = {
 	NoPredationRewardUntilAttr = "NoPredationRewardUntil",
 }
 
+Config.Level = {
+	TargetMultiplier = 5,
+	TimerBase = 90,
+	TimerStep = 15,
+	ClearedDuration = 4,
+	FailedDuration = 8,
+
+	LaneAttr = "Lane",
+	FrozenAttr = "Frozen",
+	BonusAttr = "Bonus",
+
+	PhaseAttr = "Phase",
+	LevelNumberAttr = "LevelNumber",
+	TargetAttr = "LevelTarget",
+	EndsAtAttr = "LevelEndsAt",
+}
+
+Config.Lane = {
+	Rostered = "Rostered",
+	CatchUp = "CatchUp",
+	Waiting = "Waiting",
+}
+
+Config.Phase = {
+	Waiting = "Waiting",
+	Playing = "Playing",
+	Cleared = "Cleared",
+	Failed = "Failed",
+}
+
 Config.Tiers = {
 	Bounds = { 1, 50, 500, 5000, 50000, 500000, 5000000, 50000000 },
 	Names = { "小鱼级", "中鱼级", "大鱼级", "巨鱼级", "鲨鱼级", "鲸鱼级", "海怪级", "传说级" },

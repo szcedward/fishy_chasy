@@ -5,7 +5,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Tier = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Tier"))
 local Fish = require(script.Parent:WaitForChild("Fish"))
+local LevelService = require(script.Parent:WaitForChild("LevelService"))
 
 local Predation = {}
 
@@ -53,7 +55,7 @@ local function startPlayerLifecycleHandlers()
 	end)
 end
 
-local function resolveBite(player: Player, humanoid: Humanoid, ai: BasePart)
+local function resolveAIBite(player: Player, humanoid: Humanoid, ai: BasePart)
 	local playerSize = player:GetAttribute(SIZE_ATTRIBUTE)
 	local aiSize = ai:GetAttribute(SIZE_ATTRIBUTE)
 	if typeof(playerSize) ~= "number" or typeof(aiSize) ~= "number" then
@@ -61,17 +63,45 @@ local function resolveBite(player: Player, humanoid: Humanoid, ai: BasePart)
 	end
 
 	if playerSize >= aiSize then
-		player:SetAttribute(SIZE_ATTRIBUTE, playerSize + aiSize)
+		LevelService.applyEatReward(player, aiSize)
 		Fish.relocateAI(ai)
 	else
 		humanoid.Health = 0
 	end
 end
 
+local function resolvePlayerBite(a: Player, aHum: Humanoid, b: Player, bHum: Humanoid)
+	local aSize = a:GetAttribute(SIZE_ATTRIBUTE)
+	local bSize = b:GetAttribute(SIZE_ATTRIBUTE)
+	if typeof(aSize) ~= "number" or typeof(bSize) ~= "number" then
+		return
+	end
+	if aSize == bSize then
+		return
+	end
+
+	local eater: Player, victim: Player, victimHum: Humanoid, victimSize: number
+	if aSize > bSize then
+		eater = a
+		victim, victimHum, victimSize = b, bHum, bSize
+	else
+		eater = b
+		victim, victimHum, victimSize = a, aHum, aSize
+	end
+
+	if not Predation.isPlayerInDebuff(victim) then
+		LevelService.applyEatReward(eater, victimSize)
+	end
+	victimHum.Health = 0
+end
+
+local function biteHalfRadius(size: number): number
+	return Config.Predation.ContactRadius * 0.5 * Tier.scaleOf(size)
+end
+
 local function startPredationTick(aiFishes: { BasePart })
 	local tickInterval = 1 / Config.Predation.TickHz
 	local accumulator = 0
-	local contactRadiusSq = Config.Predation.ContactRadius * Config.Predation.ContactRadius
 
 	RunService.Heartbeat:Connect(function(dt)
 		accumulator += dt
@@ -80,7 +110,9 @@ local function startPredationTick(aiFishes: { BasePart })
 		end
 		accumulator = 0
 
-		for _, player in Players:GetPlayers() do
+		local players = Players:GetPlayers()
+
+		for _, player in players do
 			local character = player.Character
 			if not character then
 				continue
@@ -93,14 +125,55 @@ local function startPredationTick(aiFishes: { BasePart })
 			if not hrp then
 				continue
 			end
+			local playerSize = player:GetAttribute(SIZE_ATTRIBUTE)
+			if typeof(playerSize) ~= "number" then
+				continue
+			end
+			local playerHalf = biteHalfRadius(playerSize)
 
 			for _, ai in aiFishes do
+				local aiSize = ai:GetAttribute(SIZE_ATTRIBUTE)
+				if typeof(aiSize) ~= "number" then
+					continue
+				end
+				local r = playerHalf + biteHalfRadius(aiSize)
 				local delta = hrp.Position - ai.Position
-				if delta:Dot(delta) < contactRadiusSq then
-					resolveBite(player, humanoid, ai)
+				if delta:Dot(delta) < r * r then
+					resolveAIBite(player, humanoid, ai)
 					if humanoid.Health <= 0 then
 						break
 					end
+				end
+			end
+		end
+
+		for i = 1, #players - 1 do
+			for j = i + 1, #players do
+				local a, b = players[i], players[j]
+				local aChar, bChar = a.Character, b.Character
+				if not aChar or not bChar then
+					continue
+				end
+				local aHum = aChar:FindFirstChildOfClass("Humanoid")
+				local bHum = bChar:FindFirstChildOfClass("Humanoid")
+				if not aHum or aHum.Health <= 0 or not bHum or bHum.Health <= 0 then
+					continue
+				end
+				local aHrp = aChar:FindFirstChild("HumanoidRootPart") :: BasePart?
+				local bHrp = bChar:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if not aHrp or not bHrp then
+					continue
+				end
+				local aSize = a:GetAttribute(SIZE_ATTRIBUTE)
+				local bSize = b:GetAttribute(SIZE_ATTRIBUTE)
+				if typeof(aSize) ~= "number" or typeof(bSize) ~= "number" then
+					continue
+				end
+
+				local r = biteHalfRadius(aSize) + biteHalfRadius(bSize)
+				local delta = aHrp.Position - bHrp.Position
+				if delta:Dot(delta) < r * r then
+					resolvePlayerBite(a, aHum, b, bHum)
 				end
 			end
 		end

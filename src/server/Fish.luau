@@ -109,15 +109,18 @@ function Fish.attachPlayerVisuals(player: Player, character: Model)
 		if typeof(size) ~= "number" then
 			return
 		end
-		label.Text = tostring(size)
+		local prefix = (player:GetAttribute(Config.Level.FrozenAttr) == true) and "❄ " or ""
+		label.Text = prefix .. tostring(size)
 		applyHumanoidScale(humanoid, Tier.scaleOf(size))
 	end
 	refresh()
 
-	local conn = player:GetAttributeChangedSignal(SIZE_ATTRIBUTE):Connect(refresh)
+	local connSize = player:GetAttributeChangedSignal(SIZE_ATTRIBUTE):Connect(refresh)
+	local connFrozen = player:GetAttributeChangedSignal(Config.Level.FrozenAttr):Connect(refresh)
 	character.AncestryChanged:Connect(function(_, parent)
 		if not parent then
-			conn:Disconnect()
+			connSize:Disconnect()
+			connFrozen:Disconnect()
 		end
 	end)
 end

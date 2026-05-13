@@ -6,9 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Fish = require(script.Parent:WaitForChild("Fish"))
 local Boost = require(script.Parent:WaitForChild("Boost"))
+local LevelService = require(script.Parent:WaitForChild("LevelService"))
 local Predation = require(script.Parent:WaitForChild("Predation"))
-
-local SIZE_ATTRIBUTE = Fish.SIZE_ATTRIBUTE
 
 local aiFolder = Instance.new("Folder")
 aiFolder.Name = "AIFish"
@@ -33,7 +32,6 @@ local function onCharacterAdded(player: Player, character: Model)
 end
 
 local function onPlayerAdded(player: Player)
-	player:SetAttribute(SIZE_ATTRIBUTE, Config.Player.InitialSize)
 	player.CharacterAdded:Connect(function(character)
 		onCharacterAdded(player, character)
 	end)
@@ -42,6 +40,7 @@ local function onPlayerAdded(player: Player)
 	end
 end
 
+LevelService.start()
 Boost.start()
 Predation.start(aiFishes)
 
@@ -50,4 +49,4 @@ for _, player in Players:GetPlayers() do
 end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
-print(`[Server] Slice D ready. Players start at size {Config.Player.InitialSize}.`)
+print(`[Server] Slice E ready. Players start at size {Config.Player.InitialSize}.`)
