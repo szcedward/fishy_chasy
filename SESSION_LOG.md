@@ -6,6 +6,85 @@ Format: a dated section per session with `Goal`, `Done`, `State at end`, `Pendin
 
 ---
 
+## 2026-05-12 (later 4) — Slice B: eat-the-AI prototype
+
+**Goal**: per `docs/ARCHITECTURE.md` §6 Slice B — server spawns static AI fish; heartbeat overlap check between players and AI; strict-greater-eats-smaller (ties favor player per PRD §4.4); eaten AI relocates 1:1 to a new random spot; player gains `Size`; head labels show numbers. No level system, no PvP, no Boost, no debuff.
+
+**Done**:
+
+- Extended `src/shared/Config.luau`: added `Player.InitialSize = 10`, `AI` (8 initial sizes `{4,6,8,9,12,18,30,50}`, part dimensions, ring-shaped spawn area with `MinDistanceFromOrigin = 20` to keep the SpawnLocation safe), `Predation` (10 Hz tick, 4-stud contact radius).
+- Added `src/server/Fish.luau` (ModuleScript): exports `SIZE_ATTRIBUTE`, `createAI`, `relocateAI`, `attachPlayerLabel`. Uses BillboardGui above each fish with white AI text / yellow player text. Player label cleans up its attribute-changed connection when the character is destroyed.
+- Rewrote `src/server/Main.server.luau`: spawns AI under `Workspace.AIFish`; on `PlayerAdded` sets `Size = 10` Attribute; on `CharacterAdded` re-applies walk speed and re-attaches head label; runs a single `Heartbeat` predation loop throttled to 10 Hz that walks (player × AI) pairs, on overlap calls `resolveBite`.
+- `resolveBite`: ties favor player (`playerSize >= aiSize`); player eats → `Size += aiSize`, AI calls `relocateAI`. Otherwise → set `Humanoid.Health = 0`; Roblox auto-respawns at the SpawnLocation. Outer loop breaks for the player after they die so a single tick can't trigger two kills.
+
+**Design fidelity notes**:
+
+- PRD §P2 (zero-penalty respawn): the `Size` attribute lives on the `Player`, not the character, so respawn does not reset it — confirmed in code.
+- PRD §5.5 predation cooldown: deliberately deferred to Slice D; left a `Boost` and `PredationDebuffSeconds` constant in `Config` so adding it later is a one-touch change.
+- PRD §P7 (speed not tied to size): respected — `WalkSpeed = Config.BaseWalkSpeed` is reapplied on respawn regardless of `Size`.
+
+**State at end**:
+
+- Files: `src/shared/Config.luau`, `src/server/Main.server.luau`, `src/server/Fish.luau`. `src/client/` still empty. No new RemoteEvents (Slice C will likely add `RequestBoost`).
+- Workspace at runtime: `Workspace.AIFish` Folder with 8 anchored Parts (collision off, touch off — overlap is purely spatial). Each AI Part has `Size` attribute and a BillboardGui showing the number.
+- Performance: 8 AI × 1 player × 10 Hz = 80 distance checks/sec. Negligible.
+
+**Testing checklist (user)**:
+
+1. `rojo serve` running.
+2. Studio Connect; press Play.
+3. Output: `[Server] Spawned 8 AI fish.` and `[Server] Slice B ready. Players start at size 10.`.
+4. 8 green flat-ish cubes appear in a ring around spawn, each with a number (4, 6, 8, 9, 12, 18, 30, 50). Player head shows yellow `10`.
+5. Walk into the `4` fish: head label changes to `14`; the `4` fish teleports somewhere else, still labeled `4`.
+6. Walk into the `9` fish (tie within tolerance after eating earlier? do it first while you are still 10): head goes to `19` (player favored on ties).
+7. Walk into the `50` fish: player ragdolls and respawns at SpawnLocation, head still shows the size you had before death (zero-penalty respawn).
+
+**Pending / next session**:
+
+- Slice C: `BoostService` — RemoteEvent `RequestBoost`, server-validated 5s ×2 with 10s CD-from-end; client input + HUD cooldown ring. Per PRD §10.2 + AI Boost is part of Slice G (with boid).
+- Subsequent: Slice D (predation debuff), then Slice E (level system).
+
+**Post-test tweak (same day)**: user reported detection felt laggy ("撞上50之后还往前跑一下才死"). Cause: `Predation.TickHz = 10` meant up to 100ms detection gap, ~2.2 studs of player movement vs 4-stud AI hitbox — player could clearly enter the AI before being judged. Raised `Predation.TickHz` from 10 to 60 (one check per Heartbeat). Performance budget at our scale is negligible (8 AI × 1 player × 60 Hz ≈ 480 distance checks/sec); the polling approach will need revisiting only when level generators push AI counts into the hundreds (Slice F+), at which point grid hashing or `workspace:GetPartBoundsInRadius` are the planned escalation paths. Note: some residual "slide before ragdoll" is Roblox death animation + HRP linear velocity, not detection lag — optional hard-stop (`hrp.AssemblyLinearVelocity = Vector3.zero`) deferred unless 60 Hz still feels off.
+
+**Pulled forward from Slice H — tier-based visual scaling (PRD §9.5 + §9.1)**: user noticed no visible model growth after eating fish. Per PRD §9.5 visuals are *tier-based discrete* (not continuous), so within a tier there is intentionally no scaling. To make this visible in dev testing — and because it's pure forward work (no rework risk) — implemented the tier system now:
+
+- New `src/shared/Tier.luau` exposing `tierOf(size)`, `scaleOf(size)`, `colorOf(size)`, `nameOf(size)`; tier table sourced from `Config.Tiers` (Bounds, Names, Colors, ScalePerStep=0.5).
+- `Fish.luau`: AI fish now sized by `Config.AI.PartSize * Tier.scaleOf(size)` and colored by `Tier.colorOf(size)`. Renamed `attachPlayerLabel` → `attachPlayerVisuals`; on every `Size` attribute change it now also calls `applyHumanoidScale(humanoid, Tier.scaleOf(size))` writing the four body scale NumberValues (`BodyHeightScale`/`BodyWidthScale`/`BodyDepthScale`/`HeadScale`).
+- Effect in Slice B: 7 of 8 AI are 小鱼级 (scale 1.0, light green), the `50` AI is 中鱼级 (scale 1.5, green). Player visibly grows when crossing into 中鱼级 (`Size ≥ 50`).
+
+Tier name display (above-head label showing "小鱼级"/"中鱼级") still deferred to Slice H — just numbers + color + scale for now.
+
+---
+
+## 2026-05-12 (later 3) — Slice A: base movement skeleton
+
+**Goal**: per `docs/ARCHITECTURE.md` §6 Slice A — replace env-verification `Hello.*` placeholders with the first real modules: a base `WalkSpeed` applied to every player on spawn. No fish mesh, no AI, no level system, no UI yet.
+
+**Done**:
+
+- Created `src/shared/Config.luau` — central constants module. Defines `BaseWalkSpeed = 22` (decoupled from `size` per PRD §P7) plus forward placeholders for `Boost` (Slice C) and `PredationDebuffSeconds` (Slice D); kept in `ReplicatedStorage.Shared` so both server and client (later) can read it.
+- Created `src/server/Main.server.luau` — entry Script: on `PlayerAdded`/`CharacterAdded` set `Humanoid.WalkSpeed = Config.BaseWalkSpeed`. Also handles the case where a player is already in-game when the server script first runs. Prints a readiness line on boot.
+- Deleted env-verification placeholders: `src/server/Hello.server.luau` (also clears the `". hahhahaha"` live-edit residue), `src/client/Hello.client.luau`, `src/shared/Greeter.luau`.
+
+**State at end**:
+
+- Rojo mapping unchanged. After next Rojo sync, Explorer should show only `ServerScriptService.Server.Main` and `ReplicatedStorage.Shared.Config`; `Hello`, `Greeter` should be gone.
+- `src/client/` is empty; that is acceptable for Slice A (no client logic yet).
+- Slice A is server-only: relies on the Studio Baseplate world for geometry and the default character rig for visuals. No fish mesh swap yet (deferred to a polish slice).
+
+**Testing checklist (user)**:
+
+1. Confirm `rojo serve` is still running (or restart it).
+2. In Studio, Connect via the Rojo plugin. Explorer should now show `Main` (not `Hello`) under `ServerScriptService.Server`, and `Config` (not `Greeter`) under `ReplicatedStorage.Shared`.
+3. Press Play. Output should print `[Server] Slice A ready. BaseWalkSpeed = 22`.
+4. Walk with WASD; movement should feel brisk and uniform. (Default Roblox WalkSpeed is 16, so 22 should feel noticeably faster.)
+
+**Pending / next session**:
+
+- Slice B: server-side overlap detection between players and a small set of static AI fish models; strict-greater-eats-smaller; 1:1 AI respawn; introduce the `size` Attribute on players.
+
+---
+
 ## 2026-05-12 (later) — REQUIREMENTS v3 + ARCHITECTURE published
 
 **Goal**: design review of all SESSION_LOG queued rules; merge into a single authoritative PRD; prepare for implementation.
