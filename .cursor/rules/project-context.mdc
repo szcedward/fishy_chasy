@@ -1,0 +1,63 @@
+---
+description: Project context, environment state, and session-start protocol for the my-first-game Roblox project.
+alwaysApply: true
+---
+
+# my-first-game — agent context
+
+## What this project is
+
+A Roblox/Luau game scaffold using **Cursor (editor) + Rojo (sync) + Roblox Studio (3D editor / playtest / publish)**.
+
+- Code lives in `src/`, edited in Cursor.
+- Rojo syncs `src/` ↔ Studio's DataModel via `rojo serve` on port `34872`.
+- Rokit (`rokit.toml`) pins toolchain versions.
+- Studio is used only for the 3D world, plugin install, playtest, and publish.
+
+## Environment is fully installed and verified
+
+Verified working on Windows / PowerShell as of 2026-05-10:
+
+- `rokit` 1.2.0, `rojo` 7.6.1, `stylua` 2.4.1 — all on PATH
+- Rojo Studio plugin installed
+- Cursor extensions: `evaera.vscode-rojo`, `JohnnyMorganz.luau-lsp`, `JohnnyMorganz.stylua`
+
+**Don't re-run `setup.ps1`** unless `rokit --version` / `rojo --version` start failing.
+
+## Start-of-session protocol
+
+1. Read `SESSION_LOG.md` (newest entry first) to recover where we left off.
+2. Briefly summarize last session's state to the user, then ask what they want to do next. Don't dive into tools before confirming intent.
+3. If the next step needs sync, **offer** to start `rojo serve` in a backgrounded terminal (`block_until_ms: 0`). Don't auto-start it — confirm first.
+4. Remind the user that Studio must be opened separately and **Plugins → Rojo → Connect** clicked after `rojo serve` is up.
+5. At end of session, append a dated entry to `SESSION_LOG.md` (newest on top).
+
+## Day-to-day commands
+
+```powershell
+rojo serve                                    # start sync (leave running)
+rojo build -o build/my-first-game.rbxlx       # build standalone place
+stylua src/                                   # format all Luau
+rokit update                                  # bump tools to latest pinned minors
+```
+
+## Rojo file conventions
+
+| File pattern | Roblox instance |
+| --- | --- |
+| `*.server.luau` | `Script` |
+| `*.client.luau` | `LocalScript` |
+| `*.luau` | `ModuleScript` |
+| `init.server.luau` (in folder) | folder collapses into a Script in place |
+
+Sync roots (per `default.project.json`):
+
+- `src/server/` → `ServerScriptService.Server`
+- `src/client/` → `StarterPlayer.StarterPlayerScripts.Client`
+- `src/shared/` → `ReplicatedStorage.Shared`
+
+## Diagnostics when sync looks broken
+
+- `Invoke-WebRequest http://localhost:34872/api/rojo -UseBasicParsing` → expect JSON with `"projectName":"my-first-game"`.
+- Studio Explorer is the ground truth for whether sync arrived; the Rojo plugin panel does not show a tree in v2.1.2.
+- `rojo serve` is silent on client connect — no log doesn't mean failure.

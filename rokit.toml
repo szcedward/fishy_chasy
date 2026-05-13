@@ -1,0 +1,7 @@
+# Tools managed by Rokit (https://github.com/rojo-rbx/rokit)
+# Run `rokit install` to install everything in this manifest.
+# Run `rokit add <owner>/<repo>` to add a new tool.
+
+[tools]
+rojo = "rojo-rbx/rojo@7.6.1"
+stylua = "JohnnyMorganz/stylua@2.4.1"
