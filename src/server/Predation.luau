@@ -11,6 +11,9 @@ local LevelService = require(script.Parent:WaitForChild("LevelService"))
 
 local Predation = {}
 
+local PHASE_ATTR = Config.Level.PhaseAttr
+local PLAYING = Config.Phase.Playing
+
 local NPRU = Config.Predation.NoPredationRewardUntilAttr
 local SIZE_ATTRIBUTE = Fish.SIZE_ATTRIBUTE
 
@@ -109,6 +112,10 @@ local function startPredationTick(aiFishes: { BasePart })
 			return
 		end
 		accumulator = 0
+
+		if workspace:GetAttribute(PHASE_ATTR) ~= PLAYING then
+			return
+		end
 
 		local players = Players:GetPlayers()
 

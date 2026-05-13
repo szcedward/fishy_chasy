@@ -19,11 +19,14 @@ Config.Player = {
 }
 
 Config.AI = {
-	InitialSizes = { 4, 6, 8, 9, 12, 18, 30, 50 },
 	PartSize = Vector3.new(4, 2, 4),
 	SpawnAreaCenter = Vector3.new(0, 2, 0),
 	SpawnAreaRadius = 80,
 	MinDistanceFromOrigin = 20,
+
+	MinQuota = 8,
+	MaxAISizeRatio = 0.8,
+	QuotaMultiplier = 1.5,
 }
 
 Config.Predation = {

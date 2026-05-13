@@ -9,18 +9,6 @@ local Boost = require(script.Parent:WaitForChild("Boost"))
 local LevelService = require(script.Parent:WaitForChild("LevelService"))
 local Predation = require(script.Parent:WaitForChild("Predation"))
 
-local aiFolder = Instance.new("Folder")
-aiFolder.Name = "AIFish"
-aiFolder.Parent = workspace
-
-local aiFishes: { BasePart } = {}
-for _, size in Config.AI.InitialSizes do
-	local part = Fish.createAI(size)
-	part.Parent = aiFolder
-	table.insert(aiFishes, part)
-end
-print(`[Server] Spawned {#aiFishes} AI fish.`)
-
 local function applyBaseSpeed(character: Model)
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
 	humanoid.WalkSpeed = Config.BaseWalkSpeed
@@ -40,7 +28,7 @@ local function onPlayerAdded(player: Player)
 	end
 end
 
-LevelService.start()
+local aiFishes = LevelService.start()
 Boost.start()
 Predation.start(aiFishes)
 
@@ -49,4 +37,4 @@ for _, player in Players:GetPlayers() do
 end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
-print(`[Server] Slice E ready. Players start at size {Config.Player.InitialSize}.`)
+print("[Server] Slice F ready. AI is now level-generated.")

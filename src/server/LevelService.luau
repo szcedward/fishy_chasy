@@ -6,8 +6,12 @@ local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Fish = require(script.Parent:WaitForChild("Fish"))
+local LevelGenerator = require(script.Parent:WaitForChild("LevelGenerator"))
 
 local LevelService = {}
+
+local aiFolder: Folder? = nil
+local aiFishes: { BasePart } = {}
 
 local SIZE = Fish.SIZE_ATTRIBUTE
 local BONUS = Config.Level.BonusAttr
@@ -90,6 +94,25 @@ local function checkWinCondition()
 	clearLevel()
 end
 
+local function rebuildAIForLevel(sMin: number, target: number)
+	for _, part in aiFishes do
+		part:Destroy()
+	end
+	table.clear(aiFishes)
+
+	local folder = aiFolder
+	if not folder then
+		return
+	end
+
+	local sizes = LevelGenerator.generate(sMin, target)
+	for _, size in sizes do
+		local part = Fish.createAI(size)
+		part.Parent = folder
+		table.insert(aiFishes, part)
+	end
+end
+
 function startLevel(level: number)
 	table.clear(rosterSet)
 	table.clear(frozenSet)
@@ -106,13 +129,15 @@ function startLevel(level: number)
 	local timer = computeTimer(level)
 	local endsAt = now() + timer
 
+	rebuildAIForLevel(sMin, target)
+
 	workspace:SetAttribute(LEVEL_ATTR, level)
 	workspace:SetAttribute(TARGET_ATTR, target)
 	workspace:SetAttribute(ENDS_AT_ATTR, endsAt)
 	setPhase(PHASE.Playing)
 
 	print(
-		`[LevelService] Start L{level} | S_min={sMin} target={target} timer={timer}s rostered={countSet(rosterSet)}`
+		`[LevelService] Start L{level} | S_min={sMin} target={target} timer={timer}s rostered={countSet(rosterSet)} ai={#aiFishes}`
 	)
 end
 
@@ -245,7 +270,17 @@ local function timerTick()
 	end)
 end
 
-function LevelService.start()
+function LevelService.start(): { BasePart }
+	local existing = workspace:FindFirstChild("AIFish")
+	if existing then
+		existing:Destroy()
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "AIFish"
+	folder.Parent = workspace
+	aiFolder = folder
+	table.clear(aiFishes)
+
 	setPhase(PHASE.Waiting)
 	workspace:SetAttribute(LEVEL_ATTR, 0)
 	workspace:SetAttribute(TARGET_ATTR, 0)
@@ -258,6 +293,8 @@ function LevelService.start()
 	Players.PlayerRemoving:Connect(onPlayerRemoving)
 
 	timerTick()
+
+	return aiFishes
 end
 
 return LevelService
