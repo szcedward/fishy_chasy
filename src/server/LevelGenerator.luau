@@ -43,10 +43,7 @@ function LevelGenerator.generate(sMin: number, target: number): { number }
 		sum += v
 	end
 	local avg = if #chain > 0 then sum / #chain else math.max(1, maxAi / 2)
-	local quota = math.max(
-		Config.AI.MinQuota,
-		math.ceil((safeTarget / math.max(1, avg)) * Config.AI.QuotaMultiplier)
-	)
+	local quota = math.max(Config.AI.MinQuota, math.ceil((safeTarget / math.max(1, avg)) * Config.AI.QuotaMultiplier))
 
 	local list: { number } = {}
 	for _, v in chain do

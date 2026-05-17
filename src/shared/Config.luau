@@ -27,12 +27,29 @@ Config.AI = {
 	MinQuota = 8,
 	MaxAISizeRatio = 0.8,
 	QuotaMultiplier = 1.5,
+
+	Speed = 16,
+	ChaseRadius = 30,
+	FleeRadius = 35,
+	WanderMinSeconds = 2,
+	WanderMaxSeconds = 5,
+	BoundarySteerRatio = 0.85,
+
+	BoostRollMinSeconds = 1,
+	BoostRollMaxSeconds = 2,
+	BoostBaseProbability = 0.05,
+	BoostPanicProbability = 0.15,
+	BoostPanicRadius = 35,
+	BoostReactionDelayMin = 0.2,
+	BoostReactionDelayMax = 0.8,
 }
 
 Config.Predation = {
 	TickHz = 60,
 	ContactRadius = 4,
 	NoPredationRewardUntilAttr = "NoPredationRewardUntil",
+	SpawnProtectionSeconds = 3,
+	SpawnProtectedUntilAttr = "SpawnProtectedUntil",
 }
 
 Config.Level = {

@@ -8,6 +8,7 @@ local Fish = require(script.Parent:WaitForChild("Fish"))
 local Boost = require(script.Parent:WaitForChild("Boost"))
 local LevelService = require(script.Parent:WaitForChild("LevelService"))
 local Predation = require(script.Parent:WaitForChild("Predation"))
+local AIService = require(script.Parent:WaitForChild("AIService"))
 
 local function applyBaseSpeed(character: Model)
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
@@ -31,10 +32,11 @@ end
 local aiFishes = LevelService.start()
 Boost.start()
 Predation.start(aiFishes)
+AIService.start(aiFishes)
 
 for _, player in Players:GetPlayers() do
 	onPlayerAdded(player)
 end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
-print("[Server] Slice F ready. AI is now level-generated.")
+print("[Server] Slice G ready. AI fish are now alive.")

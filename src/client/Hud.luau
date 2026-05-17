@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Format"))
 
 local Hud = {}
 
@@ -158,12 +159,26 @@ function Hud.mount()
 
 		if phase == PHASE.Playing then
 			local remaining = math.max(0, endsAt - t)
-			local sizeText = if frozen then string.format("❄ %d", size) else tostring(size)
-			local bonusText = if bonus > 0 then string.format(" | BONUS %d", bonus) else ""
-			topLabel.Text = string.format("L%d  TARGET %d  %0.0fs  |  YOU %s%s", level, target, remaining, sizeText, bonusText)
+			local sizeText = if frozen then "❄ " .. Format.number(size) else Format.number(size)
+			local bonusText = if bonus > 0 then " | BONUS " .. Format.number(bonus) else ""
+			topLabel.Text = string.format(
+				"L%d  TARGET %s  %0.0fs  |  YOU %s%s",
+				level,
+				Format.number(target),
+				remaining,
+				sizeText,
+				bonusText
+			)
 			overlay.Visible = false
 		elseif phase == PHASE.Cleared then
-			topLabel.Text = string.format("L%d  TARGET %d  |  YOU %d (BONUS %d)", level, target, size, bonus)
+			local bonusStr = if bonus > 0 then " (BONUS " .. Format.number(bonus) .. ")" else ""
+			topLabel.Text = string.format(
+				"L%d  TARGET %s  |  YOU %s%s",
+				level,
+				Format.number(target),
+				Format.number(size),
+				bonusStr
+			)
 			overlay.Visible = true
 			overlayLabel.Text = string.format("LEVEL %d CLEARED!", level)
 			overlayLabel.TextColor3 = Color3.fromRGB(160, 255, 180)

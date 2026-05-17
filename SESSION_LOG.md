@@ -1,5 +1,66 @@
 # Session log
 
+---
+
+## 2026-05-16 — Slice H polish + spawn protection hotfix
+
+**Goal**: Slice H (number formatting, tier labels, sounds) + a spawn-protection fix reported by user.
+
+**Done**:
+
+- **Spawn protection hotfix** (`src/server/Predation.luau`, `src/shared/Config.luau`): `CharacterAdded` now writes `SpawnProtectedUntil = now() + 3` on the Player. `resolveAIBite` skips the kill while the attribute is active. Player can still eat smaller AI during protection. Config: `Config.Predation.SpawnProtectionSeconds = 3`, `SpawnProtectedUntilAttr = "SpawnProtectedUntil"`.
+- **`src/shared/Format.luau`** (new): `Format.number(n)` → K/M/B/T with 1 decimal for values < 10 in that unit (e.g. 1234 → "1.2K", 12345 → "12K", 1500000 → "1.5M").
+- **`src/server/Fish.luau`**: BillboardGui size 80×24 → 110×44; head labels now show `"小鱼级\n1.2K"` (tier name + formatted number, two lines). Players show `"❄ 42\n小鱼级"` when frozen. Uses `Format.number`.
+- **`src/client/Hud.luau`**: All size/target/bonus numbers use `Format.number`. Top panel text properly uses K/M/B for large values.
+- **`src/client/Sounds.luau`** (new): `Sounds.mount()` creates Sound instances under SoundService; listens to `Size` attribute (eat), `BoostActiveUntil` (boost), workspace `Phase` (level cleared/failed), `Humanoid.Died` (death). Sound IDs are placeholders — can be swapped in the `IDS` table at top of file.
+- **`src/client/Main.client.luau`**: Added `Sounds.mount()`.
+
+**Sound IDs (placeholders — replace as needed)**:
+- Eat: `rbxassetid://9117502460`
+- Die: `rbxassetid://131070166`
+- LevelCleared: `rbxassetid://3051417649`
+- LevelFailed: `rbxassetid://445596489`
+- Boost: `rbxassetid://154965962`
+
+**State at end**: All MVP slices A–H complete. Game is functionally complete per PRD. Remaining work is playtesting, balancing, and optional future features (DataStore, skins, Robux).
+
+**Pending / next session**: Playtest balance tuning (AI speed, level timer, target multiplier). Optional: publish to Roblox, DataStore for persistent scores, fish mesh swap.
+
+---
+
+## 2026-05-14 — Slices D–G completed
+
+**Goal**: implement Slice D (predation debuff), Slice E (level system + PvP), Slice F (level generator), Slice G (AI movement + AI Boost), plus bite-radius scaling fix and banner shrink.
+
+**Done**:
+
+- **Slice D** (`src/server/Predation.luau` new, `src/shared/Config.luau` extended): `NoPredationRewardUntil` Player Attribute set 10 s after respawn; `Predation.isPlayerInDebuff()` API exported. HUD shows red `NO REWARD Xs` panel.
+- **Slice E** (`src/server/LevelService.luau` new, `src/client/Hud.luau` rewritten, `src/server/Fish.luau` updated):
+  - State machine `Waiting → Playing → Cleared | Failed → …` via `workspace` Attributes (`Phase`, `LevelNumber`, `LevelTarget`, `LevelEndsAt`).
+  - `LevelParticipants` (Rostered) snapshot at level start; `CatchUp` lane for mid-level joiners.
+  - `target = S_min × 5`, `timer = 90 + level × 15 s`; `Frozen` + `Bonus` per PRD §5.4.
+  - `§5.5` debuff fully wired: eater gets no reward if victim is in NPRU window (but victim still dies).
+  - PvP: player-vs-player contact resolved in `Predation.luau`; same-size = no eat.
+  - Head label shows `❄` prefix when Frozen.
+  - HUD: top-center level/target/timer/size/bonus; top-right Lane badge (`ROSTERED`/`CATCH-UP`/`WAITING`); thin banner for Cleared/Failed (replaced oversized modal).
+  - Predation gated on `Phase == Playing` so no kills during Cleared/Failed transitions.
+- **Bite-radius scaling fix**: `Predation.luau` now computes per-entity half-radius as `ContactRadius × 0.5 × Tier.scaleOf(size)`; two fish touching uses sum of both half-radii. Fixes "big fish has same hitbox as tiny fish" bug.
+- **Slice F** (`src/server/LevelGenerator.luau` new): greedy chain construction guarantees a solvable path from `S_min` to `target`; log-uniform random AI fill to `quota_N`; `Config.AI.MaxAISizeRatio = 0.8`, `QuotaMultiplier = 1.5`, `MinQuota = 8`. `LevelService` owns AI lifecycle (destroy old / spawn new on each `startLevel`). `Config.AI.InitialSizes` removed.
+- **Slice G** (`src/server/AIService.luau` new): boid movement (flee > chase > wander, boundary steering), smooth direction lerp (turn rate ~4 rad/s), per-AI independent boost roll timer (1–2 s staggered), low-skill AI boost (`BoostBaseProbability = 0.05` + `BoostPanicProbability = 0.15` when larger player within 35 studs), reaction delay 0.2–0.8 s. AI-vs-AI predation at 10 Hz (larger relocates smaller, no size gain). `AIService.start(aiFishes)` holds shared table reference — survives `LevelService.rebuildAIForLevel` automatically. `Config.AI.Speed = 16` (slower than player 22; fish feel catchable but not trivial).
+
+**State at end**:
+
+- All MVP slices A–G complete. Only Slice H (polish: K/M/B numbers, tier name in HUD, sounds) remains.
+- Server files: `Main`, `Boost`, `Fish`, `LevelService`, `LevelGenerator`, `Predation`, `AIService`.
+- Shared files: `Config`, `Tier`, `Remotes`.
+- Client files: `Main.client`, `Boost`, `Hud`.
+
+**Pending / next session**:
+
+- Slice H: K/M/B number formatting in head labels + HUD; tier name shown in HUD or above-head label; sound effects (eat, die, level clear, boost); optional: CatchUp HUD copy polish.
+
+---
+
 Append-only history of what each Cursor agent session accomplished. **Newest entry on top.**
 
 Format: a dated section per session with `Goal`, `Done`, `State at end`, `Pending / next session`.

@@ -15,6 +15,7 @@ local PHASE_ATTR = Config.Level.PhaseAttr
 local PLAYING = Config.Phase.Playing
 
 local NPRU = Config.Predation.NoPredationRewardUntilAttr
+local SPAWN_PROTECTED_UNTIL = Config.Predation.SpawnProtectedUntilAttr
 local SIZE_ATTRIBUTE = Fish.SIZE_ATTRIBUTE
 
 local function now(): number
@@ -30,6 +31,10 @@ local pendingDebuff: { [Player]: boolean } = {}
 
 local function setupCharacter(player: Player, character: Model)
 	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
+
+	-- Spawn protection: AI cannot kill this player for the first N seconds
+	player:SetAttribute(SPAWN_PROTECTED_UNTIL, now() + Config.Predation.SpawnProtectionSeconds)
+
 	humanoid.Died:Connect(function()
 		pendingDebuff[player] = true
 	end)
@@ -69,6 +74,10 @@ local function resolveAIBite(player: Player, humanoid: Humanoid, ai: BasePart)
 		LevelService.applyEatReward(player, aiSize)
 		Fish.relocateAI(ai)
 	else
+		local protectedUntil = player:GetAttribute(SPAWN_PROTECTED_UNTIL)
+		if typeof(protectedUntil) == "number" and protectedUntil > now() then
+			return
+		end
 		humanoid.Health = 0
 	end
 end
