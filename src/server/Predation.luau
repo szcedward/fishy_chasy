@@ -107,8 +107,46 @@ local function resolvePlayerBite(a: Player, aHum: Humanoid, b: Player, bHum: Hum
 	victimHum.Health = 0
 end
 
-local function biteHalfRadius(size: number): number
-	return Config.Predation.ContactRadius * 0.5 * Tier.scaleOf(size)
+-- Visual half-extents at Tier scale = 1 (derived from Fish.luau body constants):
+--   AI  body: PartSize(4,2,4) × MeshScale(1,0.65,1.8) → halfLen=3.6  halfWid=2.0
+--   PLR body: Base(3,1.8,4.2)× MeshScale(1,0.82,1.3)  → halfLen=2.73 halfWid=1.5
+local AI_HALF_L = Config.AI.PartSize.Z * 1.8 / 2 -- 3.6
+local AI_HALF_W = Config.AI.PartSize.X / 2 -- 2.0
+local PLR_HALF_L = 4.2 * 1.3 / 2 -- 2.73
+local PLR_HALF_W = 3.0 / 2 -- 1.5
+
+-- In-XZ-plane unit vector perpendicular to fwd.
+local function perp2D(fwd: Vector3): Vector3
+	return Vector3.new(-fwd.Z, 0, fwd.X)
+end
+
+-- 2-D Separating Axis Theorem for two oriented rectangles in the XZ plane.
+-- hl = half-length (along fwd),  hw = half-width (perpendicular to fwd).
+-- Tests exactly 4 face-normal axes — O(1), no sqrt, exact result.
+local function fishTouching(
+	c1: Vector3,
+	fwd1: Vector3,
+	hl1: number,
+	hw1: number,
+	c2: Vector3,
+	fwd2: Vector3,
+	hl2: number,
+	hw2: number
+): boolean
+	local rw1 = perp2D(fwd1)
+	local rw2 = perp2D(fwd2)
+	local d = c2 - c1
+
+	-- Project both OBBs onto `axis`; separated → no contact on this axis
+	local function separated(axis: Vector3): boolean
+		local proj = math.abs(d:Dot(axis))
+		local e1 = hl1 * math.abs(fwd1:Dot(axis)) + hw1 * math.abs(rw1:Dot(axis))
+		local e2 = hl2 * math.abs(fwd2:Dot(axis)) + hw2 * math.abs(rw2:Dot(axis))
+		return proj > e1 + e2
+	end
+
+	-- Overlapping iff NOT separated on any of the four face-normal axes
+	return not (separated(fwd1) or separated(rw1) or separated(fwd2) or separated(rw2))
 end
 
 local function startPredationTick(aiFishes: { BasePart })
@@ -145,16 +183,25 @@ local function startPredationTick(aiFishes: { BasePart })
 			if typeof(playerSize) ~= "number" then
 				continue
 			end
-			local playerHalf = biteHalfRadius(playerSize)
+			local ps = Tier.scaleOf(playerSize)
+			local playerFwd = hrp.CFrame.LookVector
 
 			for _, ai in aiFishes do
 				local aiSize = ai:GetAttribute(SIZE_ATTRIBUTE)
 				if typeof(aiSize) ~= "number" then
 					continue
 				end
-				local r = playerHalf + biteHalfRadius(aiSize)
-				local delta = hrp.Position - ai.Position
-				if delta:Dot(delta) < r * r then
+				local as = Tier.scaleOf(aiSize)
+				if fishTouching(
+					hrp.Position,
+					playerFwd,
+					PLR_HALF_L * ps,
+					PLR_HALF_W * ps,
+					ai.Position,
+					ai.CFrame.LookVector,
+					AI_HALF_L * as,
+					AI_HALF_W * as
+				) then
 					resolveAIBite(player, humanoid, ai)
 					if humanoid.Health <= 0 then
 						break
@@ -186,9 +233,17 @@ local function startPredationTick(aiFishes: { BasePart })
 					continue
 				end
 
-				local r = biteHalfRadius(aSize) + biteHalfRadius(bSize)
-				local delta = aHrp.Position - bHrp.Position
-				if delta:Dot(delta) < r * r then
+				local as2, bs2 = Tier.scaleOf(aSize), Tier.scaleOf(bSize)
+				if fishTouching(
+					aHrp.Position,
+					aHrp.CFrame.LookVector,
+					PLR_HALF_L * as2,
+					PLR_HALF_W * as2,
+					bHrp.Position,
+					bHrp.CFrame.LookVector,
+					PLR_HALF_L * bs2,
+					PLR_HALF_W * bs2
+				) then
 					resolvePlayerBite(a, aHum, b, bHum)
 				end
 			end
