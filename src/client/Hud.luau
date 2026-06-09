@@ -135,6 +135,11 @@ function Hud.mount()
 	debuffLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
 	debuffFrame.Visible = false
 
+	local shieldFrame, shieldLabel = makeBottomRightPanel(gui, "ShieldStatus", 36, -220)
+	shieldFrame.BackgroundColor3 = Color3.fromRGB(20, 60, 80)
+	shieldLabel.TextColor3 = Color3.fromRGB(160, 240, 255)
+	shieldFrame.Visible = false
+
 	local function laneVisual(lane: string?): (string, Color3)
 		if lane == LANES.CatchUp then
 			return "CATCH-UP", Color3.fromRGB(180, 120, 40)
@@ -215,6 +220,21 @@ function Hud.mount()
 			debuffLabel.Text = string.format("NO REWARD %0.1fs", npru - t)
 		else
 			debuffFrame.Visible = false
+		end
+
+		local shieldLayers = localPlayer:GetAttribute(Config.Shield.LayersAttr)
+		local blocking = localPlayer:GetAttribute(Config.Shield.BlockedEncounterAttr) == true
+		if typeof(shieldLayers) == "number" and shieldLayers > 0 then
+			shieldFrame.Visible = true
+			if blocking then
+				shieldLabel.Text = string.format("SHIELD x%d  (BLOCKING)", shieldLayers)
+				shieldLabel.TextColor3 = Color3.fromRGB(200, 255, 255)
+			else
+				shieldLabel.Text = string.format("SHIELD x%d", shieldLayers)
+				shieldLabel.TextColor3 = Color3.fromRGB(160, 240, 255)
+			end
+		else
+			shieldFrame.Visible = false
 		end
 	end)
 end

@@ -22,6 +22,8 @@ local IDS = {
 	LevelCleared = "rbxassetid://3051417649", -- upbeat chime
 	LevelFailed = "rbxassetid://445596489", -- sad wah-wah
 	Boost = "rbxassetid://154965962", -- whoosh
+	FoodPickup = "rbxassetid://4612375802", -- bright pickup chime
+	ShieldBreak = "rbxassetid://12222216", -- glassy pop
 }
 
 local VOLUMES = {
@@ -30,6 +32,8 @@ local VOLUMES = {
 	LevelCleared = 1.0,
 	LevelFailed = 0.8,
 	Boost = 0.7,
+	FoodPickup = 0.75,
+	ShieldBreak = 0.65,
 }
 
 local sounds: { [string]: Sound } = {}
@@ -84,6 +88,26 @@ function Sounds.mount()
 		if typeof(until_) == "number" and until_ > workspace:GetServerTimeNow() then
 			play("Boost")
 		end
+	end)
+
+	-- Shield layers: pickup vs break
+	local lastShield = localPlayer:GetAttribute(Config.Shield.LayersAttr) or 0
+	localPlayer:GetAttributeChangedSignal(Config.Shield.LayersAttr):Connect(function()
+		local newShield = localPlayer:GetAttribute(Config.Shield.LayersAttr)
+		if typeof(newShield) ~= "number" then
+			return
+		end
+		local prev = if typeof(lastShield) == "number" then lastShield else 0
+		if newShield > prev then
+			play("FoodPickup")
+		elseif newShield < prev and newShield >= 0 then
+			local char = localPlayer.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				play("ShieldBreak")
+			end
+		end
+		lastShield = newShield
 	end)
 
 	-- Level Cleared / Failed: Phase attribute on workspace

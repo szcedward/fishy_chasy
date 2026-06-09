@@ -1,6 +1,6 @@
 # my-first-game — Architecture (MVP)
 
-> **Companion**: `docs/REQUIREMENTS.md` (Draft v3) is authoritative for gameplay rules.  
+> **Companion**: `docs/REQUIREMENTS.md` (Draft v3.1) is authoritative for gameplay rules.  
 > **Sync**: Rojo — `src/server` → `ServerScriptService.Server`, `src/client` → `StarterPlayerScripts.Client`, `src/shared` → `ReplicatedStorage.Shared`.
 
 ---
@@ -9,111 +9,139 @@
 
 | Domain | Owner |
 |--------|--------|
-| `size`, `bonus`, `frozen`, `lane` (Rostered/CatchUp), predation debuff timestamps | **Server** 写入；客户端只展示与预测（可选） |
+| `size`, `bonus`, `frozen`, `lane` (Rostered/CatchUp), predation debuff timestamps | **Server** 写入；客户端只展示 |
+| `ShieldLayers`, `ShieldBlocking` | **Server** 写入；客户端 HUD / 气泡 VFX |
 | Boost 是否在 CD / 是否进入 5s 效果 | **Server** 决定 |
 | AI 位置、AI Boost 随机 | **Server** |
 | 关卡阶段、`LevelParticipants` 快照、`target`、`timer` | **Server** |
-| 相机、本地 UI、输入采样 | **Client** → RemoteFunction/Event 请求 |
+| 食物生成、拾取、护盾层数增减 | **Server**（`FoodService` / `ShieldService`） |
+| 相机、本地 UI、输入采样、音效 | **Client** |
 
-所有吃鱼判定、奖励增减、通关/失败 **必须在 server 结算**。
+所有吃鱼判定、奖励增减、护盾消耗、通关/失败 **必须在 server 结算**。
 
 ---
 
-## 2. Suggested `src/` layout（可随实现微调）
+## 2. Current `src/` layout（截至 v0.1）
 
 ```
 src/shared/
-  Config.luau              -- 常量：基础移速、Boost 时长/CD、debuff 秒数、生成公式参数
-  Types.luau               -- 若采用严格类型：PlayerLane、SessionPhase 等
-  Remotes.luau             -- 集中创建 / 引用 RemoteEvent（或拆模块）
+  Config.luau              -- 全局常量：移速、Boost、Predation、Level、Shield、Food、Tier
+  Tier.luau                -- tier / scale / color / name
+  Format.luau              -- K/M/B/T 数字格式化
+  FishCollision.luau       -- 2D OBB（SAT）碰撞：玩家/AI 鱼身矩形 overlap
+  Remotes.luau             -- RequestBoost RemoteEvent
 
 src/server/
-  init.server.luau         -- 薄入口：require 子系统并 Start()
-  Session/
-    SessionService.luau    -- session 生命周期、play-until-fail、reset
-    LevelService.luau      -- level 切换、快照 LevelParticipants、CatchUp 晋升
-    LevelGenerator.luau    -- target/timer/quota/AI 表；可解性链
-  Fish/
-    FishRegistry.luau      -- character ↔ fish 状态绑定
-    PredationService.luau  -- 碰撞或 overlap 触发吃/被吃、§5.5 debuff、奖励分支
-    BoostService.luau      -- 玩家请求 + AI 心跳随机策略
-  AI/
-    AIService.luau         -- boid / 移动意图 → 应用到 AI model
+  Main.server.luau         -- 入口：启动各 Service
+  LevelService.luau        -- 关卡状态机、Rostered/CatchUp、frozen/bonus、AI 生命周期
+  LevelGenerator.luau      -- 可解 AI 列表生成
+  Fish.luau                -- AI/玩家鱼模型、Billboard 标签、护盾气泡
+  Predation.luau           -- 捕食 tick（OBB）、§5.5 debuff、spawn 保护、护盾拦截
+  Boost.luau               -- 玩家 Boost 服务端校验
+  AIService.luau           -- boid 移动 + AI Boost + AI-vs-AI
+  ShieldService.luau       -- 护盾层数、遭遇状态、脱离后扣层
+  FoodService.luau         -- 单食物刷新与玩家拾取
+  MapSetup.server.luau     -- 水下光照、装饰、边界柱（独立 Script）
 
 src/client/
-  init.client.luau
-  UI/
-    Hud.luau               -- Level、Timer、Target、Bonus、CatchUp 标签、Boost 冷却环
-  Input/
-    BoostInput.luau        -- PC/触屏 → 调 Remote
+  Main.client.luau
+  Boost.luau               -- ContextActionService：F / R2 / 触屏 BOOST
+  Hud.luau                 -- Level、Timer、Lane、Boost、Debuff、Shield
+  Sounds.luau              -- 本地音效（吃、死、Boost、食物、护盾破碎等）
 ```
 
-> **Rojo 注意**：当前仓库仍是 `Hello.*` 占位；新增 `init.server.luau` 时，若放在 `src/server/init.server.luau`，Rojo 会把 **整个 Server 文件夹** 映射为一个 **Script**（单入口），其下子文件夹需以 **ModuleScript**（`*.luau`）形式存在。若希望多 Script，需调整 `default.project.json` 或改用多个 `.server.luau` 顶层文件。首版 MVP 推荐 **单 `init.server.luau` + 大量 ModuleScript 子模块**。
+> **Rojo 映射**：`src/server/*.server.luau` 为顶层 `Script`；其余 `*.luau` 为 `ModuleScript`。`Main.server.luau` 为薄入口，require 各 Module 并 `start()`。
 
 ---
 
-## 3. Session / level 状态机（建议）
+## 3. Session / level 状态机
 
 ```
 Idle / WaitingPlayers
     → Playing(level=N, timer)
-        → LevelCleared   -- 短暂：展示小榜、晋升 CatchUp → rostered
+        → LevelCleared   -- 短暂：展示小榜、晋升 CatchUp → rostered（护盾保留）
         → Playing(level=N+1)
-    → Failed             -- 结算大屏 → reset → WaitingPlayers
+    → Failed             -- 结算 → reset（含护盾清零）→ Level 1
 ```
 
-`Playing` 内维护：`rosterSnapshot`、`catchUpUserIds`、`aiSpawnList`、`serverTimeLevelEndsAt`。
+`Playing` 内维护：`rosterSnapshot`、`catchUpUserIds`、`aiSpawnList`、`serverTimeLevelEndsAt`；`FoodService` 仅在 `Phase == Playing` 时刷新食物。
 
 ---
 
 ## 4. 数据挂载约定
 
-| 数据 | 建议挂载点 |
-|------|------------|
-| `size`, `bonus` | `Player` Attributes 或 `leaderstats`（若需排行榜式展示） |
-| `frozen`, `lane` | `Player` Attributes |
-| `NoPredationRewardUntil` (UnixTime) | `Player` Attribute 或 module 内表 |
-| AI 的 `size` | AI `Model` Attribute 或 Value 对象 |
-| Boost CD 结束时间 | `Player` / AI 内部表 |
+| 数据 | 挂载点 |
+|------|--------|
+| `Size`, `Bonus`, `Frozen`, `Lane` | `Player` Attributes |
+| `NoPredationRewardUntil`, `SpawnProtectedUntil` | `Player` Attributes（Unix 时间） |
+| `ShieldLayers` (0–4), `ShieldBlocking` (bool) | `Player` Attributes |
+| `BoostActiveUntil`, `BoostReadyAt` | `Player` Attributes |
+| AI `Size` | AI `BasePart` Attribute |
+| `Phase`, `LevelNumber`, `LevelTarget`, `LevelEndsAt` | `workspace` Attributes |
+| AI Boost / boid 内部状态 | `AIService` module 内表 |
+| 护盾「遭遇中」服务端状态 | `ShieldService` module 内 `blockingEncounter` 表 |
+| 当前食物 Part | `FoodService` module 内 `activeFood` |
 
-客户端 HUD 监听 `Player` Attribute 变化即可刷新。
+客户端 HUD / `Sounds` / 鱼身气泡 **监听 Player Attribute** 即可，无需额外 Remote。
 
 ---
 
-## 5. Remotes（初稿）
+## 5. Remotes
 
 | 名称 | 方向 | 用途 |
 |------|------|------|
 | `RequestBoost` | Client → Server | 玩家请求开 Boost |
-| `LevelStateSync` | Server → Client | 可选：阶段、剩余时间、target（也可用 Attribute + 每分钟拉一次） |
-| `FishStateSync` | Server → Client | 若不用 Attribute 广播复杂状态 |
 
-MVP 可极简：**仅 `RequestBoost`**，其余用 `ReplicatedStorage` 里只读文件夹放配置 + Attribute 复制。
+食物与护盾 **无 Remote**；Authority 全在 server Attribute 复制。
 
 ---
 
-## 6. MVP 实现切片（建议顺序）
+## 6. 碰撞与捕食
 
-1. **Slice A — 单机鱼**：Workspace 放简单海洋盒；玩家 character 换鱼模型；**仅移速常量** + WASD/触屏移动；无吃鱼。  
-2. **Slice B — 吃 AI**：生成静态 AI 若干；**server** 判定 overlap → 严格大吃小；AI 1:1 respawn；玩家 `size` 涨；**无关卡、无 timer**。  
-3. **Slice C — Boost**：§10.2 规则 + UI 冷却环。  
-4. **Slice D — debuff**：§5.5，仅玩家受害者。  
-5. **Slice E — 关卡**：`LevelParticipants` / `CatchUp`、timer、`target`、`frozen`/`bonus`、通关/失败/reset。  
-6. **Slice F — 生成器**：§6.6 链 + 对数填充；与 `S_min` 挂钩。  
-7. **Slice G — AI boid + AI Boost**：§4.2、§10.2 AI 段。  
-8. **Slice H — 抛光**：音效、tier 称号、HUD、`CatchUp` 文案。
+- **玩家 vs AI / 玩家 vs 玩家**：`FishCollision.fishTouching` — 2D **OBB + SAT**（有朝向矩形），与 `Fish.luau` 鱼身半长/半宽一致，随 tier 缩放。
+- **Predation tick**：`Config.Predation.TickHz = 60`（每 Heartbeat 帧）。
+- **食物拾取**：玩家 HRP 与食物 Part 的 **球形距离** `< PickupRadius`（默认 5 studs）；与 AI 无检测。
 
-每片完成后在 Studio 用 Rojo **Connect + Play** 验收。
+### 护盾状态机（`ShieldService.tickEncounters`，每捕食 tick 末尾）
 
----
+```
+每帧检测：是否有严格更大的 AI/玩家与本人 OBB 重叠？
+  ├─ 重叠 且 ShieldLayers > 0 → ShieldBlocking = true；Predation 不杀、不给攻击者奖励
+  ├─ 上帧 Blocking 且 本帧已脱离所有威胁 → ShieldLayers -= 1；Blocking = false
+  └─ ShieldLayers == 0 且被咬 → 正常死亡
+```
 
-## 7. Studio-only 资产
-
-海洋几何、装饰、部分 `Sound` / `Terrain` 可保留在 Studio 中 **不被 Rojo 覆盖**（取决于 `default.project.json` 是否映射整个 Workspace）。MVP 若只映射脚本，**关卡几何在 Studio 手摆** 即可；生成器只刷 AI `Model`。
+**注意**：扣层发生在 **脱离** 威胁范围时，避免 60Hz 连续 overlap 在一帧内耗尽多层护盾。
 
 ---
 
-## 8. 测试与运营注意
+## 7. MVP 实现切片
 
-- **多人**：本地 Studio 多客户端有限；上线前用 Roblox 私密 server / 邀请好友测 `CatchUp` 与断线剔除。  
-- **性能**：AI 数量 × 玩家数 × Overlap 频率 → 需要节流（如吃鱼检测 10 Hz 或事件驱动）。
+| Slice | 内容 | 状态 |
+|-------|------|------|
+| A | 基础移速 | ✅ |
+| B | 吃 AI、tier 视觉缩放 | ✅ |
+| C | Boost | ✅ |
+| D | 捕食 debuff §5.5 | ✅ |
+| E | 关卡 / Rostered / CatchUp / PvP | ✅ |
+| F | LevelGenerator | ✅ |
+| G | AI boid + AI Boost | ✅ |
+| H | Format、tier 标签、音效、spawn 保护 | ✅ |
+| **I** | **食物 + 护盾 §10.3** | ✅ |
+| — | 鱼模型（椭球+鳍）、MapSetup 海底场景、OBB 碰撞 | ✅（v0 抛光，未单独编号） |
+
+每片完成后 Studio **Connect + Play** 验收。
+
+---
+
+## 8. Studio-only 资产
+
+海洋 Baseplate、部分装饰可与 `MapSetup.server.luau` 共存；脚本生成的 `MapDecor` / `ShieldFood` 在运行时创建。发布前确认 Studio 内 **Stop Play** 再 **Publish**。
+
+---
+
+## 9. 测试与运营注意
+
+- **多人**：私密 server 测 `CatchUp`、护盾层数、食物争抢（满层不拾取时食物仍留场）。
+- **性能**：捕食 60Hz × (玩家×AI + 玩家×玩家) + 食物 Heartbeat 拾取检测；当前 AI 数量下可忽略。
+- **iPad**：Boost 触屏按钮由 `ContextActionService` 自动创建（`createTouchButton = true`）。

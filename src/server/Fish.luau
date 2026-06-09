@@ -270,6 +270,44 @@ function Fish.attachPlayerVisuals(player: Player, character: Model)
 	highlight.OutlineTransparency = 0
 	highlight.Parent = fishBody
 
+	-- ── Shield bubble (layers 1–4) ─────────────────────────────────────────────
+	local shieldBubble = Instance.new("Part")
+	shieldBubble.Name = "ShieldBubble"
+	shieldBubble:SetAttribute("FishVisual", true)
+	shieldBubble.Shape = Enum.PartType.Ball
+	shieldBubble.Material = Enum.Material.ForceField
+	shieldBubble.Color = Color3.fromRGB(120, 220, 255)
+	shieldBubble.Anchored = false
+	shieldBubble.CanCollide = false
+	shieldBubble.CanTouch = false
+	shieldBubble.CastShadow = false
+	shieldBubble.Transparency = 1
+	shieldBubble.Size = PLAYER_BASE_SIZE * 1.35
+	local shieldWeld = weldToHRP(shieldBubble, CFrame.identity)
+
+	local function refreshShield()
+		local layers = player:GetAttribute(Config.Shield.LayersAttr)
+		local blocking = player:GetAttribute(Config.Shield.BlockedEncounterAttr) == true
+		local n = if typeof(layers) == "number" then math.clamp(math.floor(layers), 0, Config.Shield.MaxLayers) else 0
+		if n <= 0 then
+			shieldBubble.Transparency = 1
+			return
+		end
+		local size = player:GetAttribute(SIZE_ATTRIBUTE)
+		local scale = if typeof(size) == "number" then Tier.scaleOf(size) else 1
+		local bs = PLAYER_BASE_SIZE * scale
+		local bubbleScale = 1.25 + n * 0.08
+		shieldBubble.Size = bs * bubbleScale
+		shieldBubble.Transparency = math.clamp(0.72 - n * 0.12, 0.25, 0.72)
+		if blocking then
+			shieldBubble.Color = Color3.fromRGB(180, 255, 255)
+		else
+			shieldBubble.Color = Color3.fromRGB(120, 220, 255)
+		end
+		local _ = shieldWeld
+	end
+	refreshShield()
+
 	-- ── Floating label ────────────────────────────────────────────────────────
 	local labelYOffset = PLAYER_BASE_SIZE.Y * PLAYER_MESH_SCALE.Y / 2 + 1.5
 	local gui = makeLabel(fishBody, Color3.fromRGB(255, 220, 120), labelYOffset)
@@ -317,6 +355,8 @@ function Fish.attachPlayerVisuals(player: Player, character: Model)
 		-- Keep label above the tallest visual point
 		gui.StudsOffsetWorldSpace = Vector3.new(0, bs.Y * PLAYER_MESH_SCALE.Y / 2 + 1.5, 0)
 
+		refreshShield()
+
 		-- suppress unused-variable warning for bodyWeld
 		local _ = bodyWeld
 	end
@@ -324,10 +364,17 @@ function Fish.attachPlayerVisuals(player: Player, character: Model)
 
 	local connSize = player:GetAttributeChangedSignal(SIZE_ATTRIBUTE):Connect(refresh)
 	local connFrozen = player:GetAttributeChangedSignal(Config.Level.FrozenAttr):Connect(refresh)
+	local connShield = player:GetAttributeChangedSignal(Config.Shield.LayersAttr):Connect(function()
+		refresh()
+		refreshShield()
+	end)
+	local connBlocking = player:GetAttributeChangedSignal(Config.Shield.BlockedEncounterAttr):Connect(refreshShield)
 	character.AncestryChanged:Connect(function(_, parent)
 		if not parent then
 			connSize:Disconnect()
 			connFrozen:Disconnect()
+			connShield:Disconnect()
+			connBlocking:Disconnect()
 		end
 	end)
 end

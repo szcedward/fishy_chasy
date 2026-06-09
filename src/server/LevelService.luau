@@ -7,6 +7,8 @@ local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Fish = require(script.Parent:WaitForChild("Fish"))
 local LevelGenerator = require(script.Parent:WaitForChild("LevelGenerator"))
+local ShieldService = require(script.Parent:WaitForChild("ShieldService"))
+local FoodService = require(script.Parent:WaitForChild("FoodService"))
 
 local LevelService = {}
 
@@ -58,6 +60,7 @@ end
 local function resetPlayerSession(player: Player)
 	player:SetAttribute(SIZE, Config.Player.InitialSize)
 	resetPlayerLevelState(player)
+	ShieldService.clearLayers(player)
 end
 
 local function computeSMin(): number
@@ -170,6 +173,7 @@ function failLevel()
 		for _, p in Players:GetPlayers() do
 			resetPlayerSession(p)
 		end
+		FoodService.resetForSession()
 		if #Players:GetPlayers() == 0 then
 			setPhase(PHASE.Waiting)
 			return

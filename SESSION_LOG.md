@@ -2,6 +2,36 @@
 
 ---
 
+## 2026-06-09 — v0.1: 食物 + 护盾
+
+**Goal**: 地图食物拾取 → 玩家护盾（最多 4 层）；挡大鱼攻击；脱离威胁后扣层；AI 不吃食物。
+
+**Done**:
+
+- **`docs/REQUIREMENTS.md` v3.1**: 新增 §10.3 食物与护盾规则；更新 core loop、§12 已定项。
+- **`docs/ARCHITECTURE.md`**: 重写为当前真实 `src/` 布局；补充 OBB 碰撞、护盾状态机、Slice I。
+- **`src/shared/Config.luau`**: `Config.Shield`（MaxLayers=4, LayersAttr, BlockedEncounterAttr）、`Config.Food`（RespawnSeconds=20, PickupRadius, 生成区域）。
+- **`src/shared/FishCollision.luau`** (new): 从 Predation 抽出 OBB/SAT 碰撞工具，供 Predation 与 ShieldService 共用。
+- **`src/server/ShieldService.luau`** (new): 护盾层数、`blockingEncounter` 遭遇状态；`tickEncounters` 在脱离更大鱼碰撞范围后扣 1 层；死亡 / session 失败清零；过关保留。
+- **`src/server/FoodService.luau`** (new): `Playing` 阶段每 20s 无食物则生成一个；玩家拾取 +1 层；满 4 层不拾取；被吃后 20s 再刷。
+- **`src/server/Predation.luau`**: 接入护盾拦截（有盾不死、攻击者无奖励）；改用 `FishCollision`；每 tick 末尾 `ShieldService.tickEncounters`。
+- **`src/server/LevelService.luau`**: `resetPlayerSession` 清护盾；`failLevel` 调用 `FoodService.resetForSession`。
+- **`src/server/Fish.luau`**: 玩家 ForceField 护盾气泡，随层数/格挡状态变化。
+- **`src/client/Hud.luau`**: 右下角 `SHIELD xN` / `BLOCKING` 面板。
+- **`src/client/Sounds.luau`**: `FoodPickup`、`ShieldBreak` 音效。
+
+**Design notes**:
+
+- 护盾消耗采用用户指定方案：**脱离** 所有更大威胁的 OBB 范围后才扣 1 层，避免 60Hz 连续 overlap 一帧吃光多层。
+- 一次遭遇（含多条大鱼同时压住）只扣 1 层。
+- 食物不给 size/bonus；与 §5.4 frozen/bonus 路径完全独立。
+
+**State at end**: v0 功能冻结后的首个玩法扩展已落地。v0 本体含 Slice A–H、鱼模型、MapSetup、OBB 碰撞、Roblox 发布流程（用户侧进行中）。
+
+**Pending / next session**: 地图障碍物/小迷宫（用户已记录为后续）；playtest 护盾手感与食物刷新节奏；可选更新 REQUIREMENTS 中 v0 抛光项（鱼 mesh 资产、Publish 文档）。
+
+---
+
 ## 2026-05-16 — Slice H polish + spawn protection hotfix
 
 **Goal**: Slice H (number formatting, tier labels, sounds) + a spawn-protection fix reported by user.

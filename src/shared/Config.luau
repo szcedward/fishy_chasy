@@ -52,6 +52,22 @@ Config.Predation = {
 	SpawnProtectedUntilAttr = "SpawnProtectedUntil",
 }
 
+Config.Shield = {
+	MaxLayers = 4,
+	LayersAttr = "ShieldLayers",
+	BlockedEncounterAttr = "ShieldBlocking", -- replicated for client VFX pulse
+}
+
+Config.Food = {
+	RespawnSeconds = 20,
+	MaxActive = 1,
+	PickupRadius = 5,
+	PartSize = Vector3.new(2.4, 2.4, 2.4),
+	SpawnAreaCenter = Vector3.new(0, 2, 0),
+	SpawnAreaRadius = 70,
+	MinDistanceFromOrigin = 20,
+}
+
 Config.Level = {
 	TargetMultiplier = 5,
 	TimerBase = 90,
